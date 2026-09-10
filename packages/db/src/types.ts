@@ -16,7 +16,14 @@ export type Role = (typeof RoleValues)[number]
 export const SenderKindValues = ['human', 'butler', 'sub', 'system'] as const
 export type SenderKind = (typeof SenderKindValues)[number]
 
-export const TaskStatusValues = ['pending', 'done', 'failed', 'needs_human', 'deferred'] as const
+export const TaskStatusValues = [
+  'pending',
+  'done',
+  'failed',
+  'needs_human',
+  'deferred',
+  'unavailable',
+] as const
 export type TaskStatus = (typeof TaskStatusValues)[number]
 
 export const PriorityValues = ['low', 'normal', 'high'] as const
@@ -149,6 +156,7 @@ export interface TaskRow {
   summary: string | null
   detail_json: string | null
   error: string | null
+  error_code: string | null
   suggestions_json: string | null
   created_at: string
   completed_at: string | null
@@ -172,6 +180,8 @@ export interface TaskResultPatch {
   summary?: string | null
   detail?: Record<string, unknown> | null
   error?: string | null
+  /** 机器可读错误码（协议演进：如 capability_not_configured） */
+  error_code?: string | null
   suggestions?: string[] | null
   completed_at?: string | null
 }

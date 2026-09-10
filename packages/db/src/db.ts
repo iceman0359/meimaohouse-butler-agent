@@ -163,6 +163,45 @@ CREATE TABLE IF NOT EXISTS agent_events (
 CREATE INDEX IF NOT EXISTS ix_events_agent_type ON agent_events(agent_id, event_type, created_at);
 CREATE INDEX IF NOT EXISTS ix_events_session    ON agent_events(session_id);
 `,
+  // ---- v2：任务状态新增 unavailable（协议演进：能力未配置语义）+ error_code 字段。
+  // CHECK 约束无法 ALTER，重建 tasks 表（数据完整迁移，索引重建）。
+  `
+CREATE TABLE tasks_v2 (
+  task_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_key     TEXT    NOT NULL,
+  session_id   INTEGER REFERENCES sessions(session_id) ON DELETE SET NULL,
+  user_id      INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
+  butler_agent_id INTEGER REFERENCES agents(agent_id) ON DELETE SET NULL,
+  sub_agent_id    INTEGER NOT NULL REFERENCES agents(agent_id) ON DELETE RESTRICT,
+  intent       TEXT    NOT NULL,
+  params_json  TEXT    NOT NULL DEFAULT '{}',
+  priority     TEXT    NOT NULL DEFAULT 'normal' CHECK (priority IN ('low','normal','high')),
+  source       TEXT    NOT NULL DEFAULT 'human',
+  deadline     TEXT,
+  status       TEXT    NOT NULL DEFAULT 'pending'
+               CHECK (status IN ('pending','done','failed','needs_human','deferred','unavailable')),
+  summary      TEXT,
+  detail_json  TEXT,
+  error        TEXT,
+  error_code   TEXT,
+  suggestions_json TEXT,
+  created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  completed_at TEXT
+);
+INSERT INTO tasks_v2 (task_id, task_key, session_id, user_id, butler_agent_id, sub_agent_id,
+                      intent, params_json, priority, source, deadline, status,
+                      summary, detail_json, error, suggestions_json, created_at, completed_at)
+SELECT task_id, task_key, session_id, user_id, butler_agent_id, sub_agent_id,
+       intent, params_json, priority, source, deadline, status,
+       summary, detail_json, error, suggestions_json, created_at, completed_at FROM tasks;
+DROP TABLE tasks;
+ALTER TABLE tasks_v2 RENAME TO tasks;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_tasks_key     ON tasks(task_key);
+CREATE INDEX IF NOT EXISTS ix_tasks_session        ON tasks(session_id);
+CREATE INDEX IF NOT EXISTS ix_tasks_user           ON tasks(user_id);
+CREATE INDEX IF NOT EXISTS ix_tasks_sub_agent      ON tasks(sub_agent_id);
+CREATE INDEX IF NOT EXISTS ix_tasks_status_created ON tasks(status, created_at);
+`,
 ]
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.length
@@ -184,12 +223,19 @@ export function openDatabase(opts: DbOptions = {}): Database {
 /** 逐版本执行迁移（幂等：已执行的版本跳过） */
 export function migrate(db: Database): void {
   const current = Number(db.pragma('user_version', { simple: true }) as number)
-  for (let v = current; v < MIGRATIONS.length; v++) {
-    const apply = db.transaction(() => {
-      db.exec(MIGRATIONS[v])
-      db.pragma(`user_version = ${v + 1}`)
-    })
-    apply()
+  if (current >= MIGRATIONS.length) return
+  // 重建表型迁移（v2）需要临时关闭外键（PRAGMA 在事务内是 no-op，必须在事务外切）
+  db.pragma('foreign_keys = OFF')
+  try {
+    for (let v = current; v < MIGRATIONS.length; v++) {
+      const apply = db.transaction(() => {
+        db.exec(MIGRATIONS[v])
+        db.pragma(`user_version = ${v + 1}`)
+      })
+      apply()
+    }
+  } finally {
+    db.pragma('foreign_keys = ON')
   }
 }
 

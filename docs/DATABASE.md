@@ -150,8 +150,8 @@ messages(message_id PK, session_id→sessions CASCADE, sender_kind∈{human,butl
 tasks(task_id PK, task_key UNIQUE, session_id→sessions SET NULL, user_id→users SET NULL,
       butler_agent_id→agents SET NULL, sub_agent_id→agents RESTRICT,
       intent, params_json, priority∈{low,normal,high}, source, deadline,
-      status∈{pending,done,failed,needs_human,deferred}, summary, detail_json, error,
-      suggestions_json, created_at, completed_at)
+      status∈{pending,done,failed,needs_human,deferred,unavailable}, summary, detail_json,
+      error, error_code, suggestions_json, created_at, completed_at)
 agent_memories(memory_id PK, agent_id→agents CASCADE, user_id→users CASCADE,
                ns DEFAULT 'default', mem_key, value, created_at, updated_at,
                UNIQUE(agent_id, IFNULL(user_id,0), ns, mem_key))
@@ -235,9 +235,12 @@ createSqliteMemory      实现 agent-sdk 的 Memory 接口（可直接传给 def
 
 | 位置 | 集成方式 |
 |---|---|
-| `packages/butler-core`（Butler） | `new Butler({ db })` 可选注入：`chat()` 持久化 human/butler 消息 + 事件；`delegate()` 登记任务 → 执行 → 结果写回；未传 db 行为不变 |
-| `apps/butler-web`（server.ts） | 启动即建库并登记管家/子 agent 身份；聊天数据持久化到 `./data/butler.db` |
-| `packages/agents/chef` | `createChef({ memory })` 工厂可注入 SQLite 记忆；默认导出保持原样 |
+| `packages/butler-core`（Butler） | `new Butler({ db })` 可选注入：`chat()` 每轮从 DB 组装工作记忆（纪要+窗口）并持久化消息/事件；`delegate()` 登记任务 → 执行 → 结果写回（含 `unavailable` 状态与 `error_code`）；未传 db 行为不变 |
+| `packages/butler-core/memory.ts` | 工作记忆组装器：`assembleMemory()`（回放窗口 + 水位压缩）+ 清除规则（解决即弃/过期自灭），见第 9 节 |
+| `packages/agent-sdk`（记忆工具） | `createMemoryTools(memory, ns)` 把 Memory 接口暴露为 `memory_get/set/append/delete` 工具；传入 `createSqliteMemory(db, …)` 即落库——管家在装配时注入，子 Agent 经工厂的 `memory` 选项注入 |
+| `apps/butler-web`（server.ts） | 启动即建库并登记管家/子 Agent（chef、cleaner）身份；聊天数据持久化；`/api/db/*` 只读浏览接口 + `/db.html` 页面 |
+| `apps/butler-web/public/db.html` | 数据库浏览器（列结构/DDL/索引/分页数据，只读白名单校验） |
+| `packages/agents/chef`、`cleaner` | 能力注入工厂（`createChefAgent/createCleanerAgent`）支持 `memory` 选项注入 SQLite 记忆；能力未配置时任务返回 `unavailable` 并落库留痕 |
 | `examples/db-demo.ts` | 不接模型的全量演示：`npm run demo:db` |
 
 ## 7. 迁移与演进
@@ -280,6 +283,8 @@ createSqliteMemory      实现 agent-sdk 的 Memory 接口（可直接传给 def
 3. **准入收紧**：只收"未决事项 / 稳定偏好 / 重要承诺"三类，寒暄与过程细节不进纪要。
 
 因此上下文恒为 `纪要(≤600字) + 20 条`，物理上不随使用时间膨胀；`messages` 全量保留仅作审计（不在上下文里）。查看纪要：`db.html` → `agent_memories` 表，或 `butler.getBrief()`。
+
+与 memory 工具的分工：纪要负责"脉络"（自动、覆盖式），`memory_set/append` 工具负责"精确项"（显式、按 key 存取）——两者都落在 `agent_memories` 表，重启后都可用。
 
 ## 10. 测试
 

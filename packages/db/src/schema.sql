@@ -1,7 +1,8 @@
 -- ============================================================================
 -- meimaohouse-butler-agent 通用数据库 schema（SQLite）
 -- 设计目标：3NF · 多用户隔离 · 主/子 agent 统一建模 · 任意子 agent 零 schema 变更接入
--- 迁移策略：user_version 单调递增，逐版本 DDL 顺序执行（见 src/db.ts migrate()）
+-- 本文件是【最终形态参考副本】（= v1 迁移 + v2 迁移重建后的 tasks 表），
+-- 运行时真实 DDL 以 packages/db/src/db.ts 的 MIGRATIONS 数组为准。
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -91,10 +92,11 @@ CREATE TABLE IF NOT EXISTS tasks (
   source       TEXT    NOT NULL DEFAULT 'human',
   deadline     TEXT,
   status       TEXT    NOT NULL DEFAULT 'pending'
-               CHECK (status IN ('pending','done','failed','needs_human','deferred')),
+               CHECK (status IN ('pending','done','failed','needs_human','deferred','unavailable')),
   summary      TEXT,
   detail_json  TEXT,
   error        TEXT,
+  error_code   TEXT,
   suggestions_json TEXT,
   created_at   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   completed_at TEXT

@@ -46,8 +46,6 @@ scope: 所属包，如 butler-core / agent-sdk / chef / cleaner
 | 子 Agent 接入 SDK | `packages/agent-sdk` | 1997Yoyo |
 | 厨师 Agent（厨房域） | `packages/agents/chef` | 待分配 |
 | 清洁工 Agent（清洁域） | `packages/agents/cleaner` | 待分配 |
-| 电器管理 Agent | `packages/agents/appliance` | 待分配 |
-| 外出采购 Agent | `packages/agents/shopping` | 待分配 |
 
 （分工确定后更新此表，避免多人同时改同一包）
 

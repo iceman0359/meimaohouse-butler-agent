@@ -12,12 +12,13 @@
 import { configureModel } from '@meimaohouse/agent-sdk'
 import { Butler } from '@meimaohouse/butler-core'
 import chef from '@meimaohouse/chef-agent'
+import cleaner from '@meimaohouse/cleaner-agent'
 
 async function main() {
   // 先配置模型厂商（读环境变量；也可显式 configureModel({ provider: 'openai' })）
   await configureModel()
 
-  const butler = new Butler({ subAgents: [chef] })
+  const butler = new Butler({ subAgents: [chef, cleaner] })
 
   console.log('👥 管家当前花名册:')
   for (const a of butler.listAgents()) {

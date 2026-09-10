@@ -5,4 +5,5 @@
 export * from './protocol.js'
 export * from './model.js'
 export * from './memory.js'
+export * from './capability.js'
 export * from './sub-agent.js'

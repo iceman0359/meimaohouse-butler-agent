@@ -388,11 +388,11 @@ export class TaskRepository {
     return row ? this.hydrate(row) : undefined
   }
 
-  /** 写回结果信封（done/failed/needs_human/deferred 统一入口） */
+  /** 写回结果信封（done/failed/needs_human/deferred/unavailable 统一入口） */
   complete(taskKey: string, result: TaskResultPatch): TaskRow | undefined {
     const row = rowStmt<TaskRow>(
       this.db,
-      `UPDATE tasks SET status = ?, summary = ?, detail_json = ?, error = ?,
+      `UPDATE tasks SET status = ?, summary = ?, detail_json = ?, error = ?, error_code = ?,
                          suggestions_json = ?, completed_at = COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
        WHERE task_key = ? RETURNING *`,
     ).get(
@@ -400,6 +400,7 @@ export class TaskRepository {
       result.summary ?? null,
       tojson(result.detail ?? null),
       result.error ?? null,
+      result.error_code ?? null,
       result.suggestions ? JSON.stringify(result.suggestions) : null,
       result.completed_at ?? null,
       taskKey,

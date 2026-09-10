@@ -1,9 +1,14 @@
-# @meimaohouse/chef-agent — 厨师 Agent（厨房域）
+# @meimaohouse/chef-agent
 
-示例子 Agent：展示"一个领域一个子 Agent"的标准写法。
+厨房域 Agent 壳。仓库只保留能力接口，不内置模拟库存、模拟订单或模拟安全数据。
 
-- 领域：厨房域（id: `chef`）
-- 能力：冰箱库存与新鲜度、菜品采购下单、厨房安全检查、饮食数据统计
-- 工具目前为**演示/占位实现**（假数据），接入真实硬件与平台时替换 `src/tools.ts` 中各 callback
+宿主可以通过 `createChefAgent({ capabilities })` 注入真实实现：
 
-开发规范见 [docs/SUBAGENT-DEV-GUIDE.md](../../../docs/SUBAGENT-DEV-GUIDE.md)
+- `fridgeInventory`
+- `groceryOrdering`
+- `kitchenSafety`
+- `mealStats`
+
+没有注入的能力不会生成工具，模型必须返回 `unavailable`，不能伪造执行结果。
+
+开发规范见 [docs/SUBAGENT-DEV-GUIDE.md](../../../docs/SUBAGENT-DEV-GUIDE.md)。

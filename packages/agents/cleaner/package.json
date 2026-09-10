@@ -1,7 +1,7 @@
 {
-  "name": "@meimaohouse/chef-agent",
+  "name": "@meimaohouse/cleaner-agent",
   "version": "0.1.0",
-  "description": "厨师 Agent（厨房域）：冰箱库存、采购下单、安全检查、饮食数据",
+  "description": "清洁工 Agent（清洁域）：清洁、洗衣和服务预约能力接口",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

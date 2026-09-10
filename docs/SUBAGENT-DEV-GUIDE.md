@@ -1,13 +1,13 @@
 # 子 Agent 开发规范（SUBAGENT-DEV-GUIDE）
 
 > 给所有子 Agent 开发者的对接手册。读完本文 + [protocol.md](protocol.md) 即可开工。
-> 完整可运行示例：`packages/agents/chef`（照抄它的结构）。
+> 当前参考实现：`packages/agents/chef`、`packages/agents/cleaner`。
 
 ## 0. 核心概念（30 秒版）
 
 - **一个领域 = 一个子 Agent**（如厨房域 → chef，清洁域 → cleaner），领域内所有具象能力（扫地、洗衣、下单买菜）都是它自己的**工具**。
 - 子 Agent 之间**平级、互不感知、不直接调用**；协作一律经大管家转派。
-- 子 Agent 有**独立上下文**：管家只看到你返回的 `ResultEnvelope`，你的记忆/工具/长上下文不占管家窗口。
+- 子 Agent 每次任务使用新的 Agent 实例，避免不同任务之间的消息历史串扰。
 - 对接方式：用 `defineSubAgent()` 声明自己 → 管家注册后自动变成它的一个可调用工具（Agent-as-Tool）。
 
 ```
@@ -26,8 +26,9 @@ packages/agents/<agent-id>/
 ├── tsconfig.json         # 照抄 chef（extends ../../../tsconfig.base.json）
 ├── README.md             # 一句话说明领域与能力
 └── src/
-    ├── index.ts          # 默认导出 defineSubAgent({...})   ← 唯一的对接出口
-    └── tools.ts          # 领域内工具列表（可拆多个文件）
+    ├── index.ts          # createXxxAgent() + 默认空壳导出
+    ├── capabilities.ts   # 领域能力接口，不含任何假实现
+    └── tools.ts          # 根据已注入能力动态生成工具
 ```
 
 **必须遵守：**
@@ -38,19 +39,24 @@ packages/agents/<agent-id>/
 ## 2. defineSubAgent 必填字段
 
 ```ts
-import { defineSubAgent } from '@meimaohouse/agent-sdk'
-import { yourTools } from './tools.js'
+export interface MyCapabilities {
+  device?: {
+    readStatus(): Promise<{ online: boolean }>
+  }
+}
 
-export const myAgent = defineSubAgent({
-  id: 'cleaner',              // 唯一 id（= domain），小写
-  name: '清洁工',              // 展示名
-  domain: '清洁域',            // 领域名
-  description: '……',          // ★ 路由关键，见第 3 节
-  systemPrompt: '……',         // 职责与判断规则，见第 5 节
-  tools: [yourTools],         // 领域能力，见第 4 节
-  // model / memory: 可选，缺省走环境变量模型 + 进程内记忆
-})
+export function createMyAgent(options: { capabilities?: MyCapabilities } = {}) {
+  return defineSubAgent({
+    id: 'cleaner',
+    name: '清洁工',
+    domain: '清洁域',
+    description: '……',
+    systemPrompt: '……',
+    tools: createMyTools(options.capabilities),
+  })
+}
 
+export const myAgent = createMyAgent()
 export default myAgent
 ```
 
@@ -76,28 +82,26 @@ const butler = new Butler({ subAgents: [myAgent] })   // 或 butler.register(myA
 
 ## 4. 工具规范（领域内具象能力 = 插件）
 
-- 每个具象能力一个工具：`tool({ name, description, inputSchema, callback })`。
+- 每个具象能力一个工具，使用 `defineDomainTool()` 包装真实能力实现。
 - 工具名 `snake_case`，一眼看出用途：`fridge_inventory`、`order_groceries`。
 - `inputSchema` 用 Zod，字段加中文 `describe()`（模型靠它填参数）。
 - `callback` 返回 **JSON 字符串**（`JSON.stringify`），不要返回对象/类实例。
-- **不编造数据**：没接真实数据源就返回占位/演示数据并注释 `TODO: 接入 xxx`（参考 chef 的 `src/tools.ts`）。
-- 领域内新能力随时加：改 `tools.ts` 加一个 `tool()` 即可，**不需要改管家代码**。
+- **禁止假成功**：没有真实实现时不要注册工具，更不要返回模拟订单、模拟传感器状态或模拟预约。
+- 领域内新能力随时加：增加能力接口，并在 `tools.ts` 中动态生成工具，不需要改管家代码。
 
 ```ts
-export const orderGroceriesTool = tool({
-  name: 'order_groceries',
-  description: '在线下单购买食材并配送到家。',
-  inputSchema: z.object({
-    items: z.array(z.object({ name: z.string(), qty: z.number().int().positive() })),
-  }),
-  callback: async (input) => JSON.stringify({ order_id: 'DEMO-xxx', items: input.items }),
+export const readStatusTool = defineDomainTool({
+  name: 'device_status',
+  description: '读取设备真实状态。',
+  inputSchema: z.object({}),
+  execute: () => provider.readStatus(),
 })
 ```
 
 ## 5. systemPrompt 写作规范（上下文纪律）
 
 - 只写**职责范围 + 判断规则 + 协作边界**，不写历史数据/对话记录。
-- 长期事实（库存、计划、偏好）放 `Memory`（下一迭代接外部存储），不要写死在 prompt 里——否则就是"Hermes 越用越降智"的复现。
+- 长期事实（库存、计划、偏好）放入注入的 `Memory`，不要写死在 prompt 里。
 - 必须遵守（sdk 会自动追加到你的 prompt 尾部）：
   - 收到 TaskEnvelope 按 `intent` 判断意图；
   - 必须以 ResultEnvelope 返回（status/summary/detail/suggestions）；
@@ -111,6 +115,7 @@ export const orderGroceriesTool = tool({
 | 失败了 | `failed` | 一句话说明失败 | `error` 写原因 |
 | 要人类拍板 | `needs_human` | 把决策点说清楚 | 选项放 `detail` |
 | 已排期 | `deferred` | 说明安排了什么、什么时候 | `detail` 放排期 |
+| 能力未接入 | `unavailable` | 说明当前能力未配置 | `error_code=capability_not_configured` |
 
 **协作**：需要其他子 Agent（如采购后要清洁工收纳）→ 在 `suggestions` 里写"请管家转派 cleaner：……"，**不要自己找对方**。
 
@@ -134,7 +139,7 @@ git push origin feat/cleaner-basic      # 发 PR → 1 人 review → 合并 mai
 - [ ] 目录/包名/id 符合规范（`packages/agents/<id>/`、`@meimaohouse/<id>-agent`）
 - [ ] `description` 写完且自检过（路由可发现）
 - [ ] 所有工具：Zod schema + 中文 describe + 返回 JSON 字符串
-- [ ] systemPrompt 无历史数据；不编造数据（占位有 TODO 注释）
+- [ ] systemPrompt 无历史数据；未配置能力时返回 `unavailable`
 - [ ] 涉及跨领域协作时用了 `suggestions`，没有直接调别的子 Agent
 - [ ] `npm run build` 通过；领域工具单测通过
 - [ ] 无敏感信息（token/密钥）；无调试残留

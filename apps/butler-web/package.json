@@ -12,6 +12,7 @@
     "@meimaohouse/agent-sdk": "*",
     "@meimaohouse/butler-core": "*",
     "@meimaohouse/chef-agent": "*",
+    "@meimaohouse/cleaner-agent": "*",
     "@meimaohouse/db": "*"
   },
   "devDependencies": {
