@@ -1,0 +1,29 @@
+{
+  "name": "@meimaohouse/db",
+  "version": "0.1.0",
+  "description": "通用数据库层：3NF SQLite schema + 主/子 agent 通用存储接口（用户、偏好、会话、消息、任务、记忆、购物、家务、事件）",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp src/schema.sql dist/schema.sql",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@meimaohouse/agent-sdk": "*",
+    "better-sqlite3": "^13.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.6.0"
+  }
+}

@@ -33,6 +33,7 @@
 | 包 | 说明 |
 |---|---|
 | `packages/agent-sdk` | 子 Agent 接入 SDK：协议信封（Task/Result）、`defineSubAgent`、模型工厂、记忆接口 |
+| `packages/db` | 通用数据库层：3NF SQLite schema + 主/子 agent 通用存储接口（见 [docs/DATABASE.md](docs/DATABASE.md)） |
 | `packages/butler-core` | 大管家核心：`Butler` 主类（chat / delegate / register）、管家 prompt |
 | `packages/agents/chef` | 示例子 Agent（厨房域）—— 新子 Agent 照此结构 |
 | `packages/agents/*` | 其余领域子 Agent（cleaner / appliance / shopping… 待开发） |

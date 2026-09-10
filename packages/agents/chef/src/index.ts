@@ -1,8 +1,11 @@
 /**
  * 厨师 Agent（厨房域）—— 子 Agent 开发的完整示例。
  * 新子 Agent 照此结构：packages/agents/<id>/src/index.ts 默认导出 defineSubAgent(...)
+ *
+ * 记忆注入：createChef({ memory }) 可传入 SQLite 记忆（@meimaohouse/db 的
+ * createSqliteMemory），让冰箱库存/饮食记录重启不丢；默认导出走进程内记忆。
  */
-import { defineSubAgent } from '@meimaohouse/agent-sdk'
+import { defineSubAgent, type Memory } from '@meimaohouse/agent-sdk'
 import {
   fridgeInventoryTool,
   orderGroceriesTool,
@@ -10,7 +13,7 @@ import {
   mealStatsTool,
 } from './tools.js'
 
-export const chef = defineSubAgent({
+const spec = {
   id: 'chef',
   name: '厨师',
   domain: '厨房域',
@@ -27,6 +30,13 @@ export const chef = defineSubAgent({
 - 需要人类拍板的事（如大额采购、更换设备）返回 status=needs_human；
 - 采购后如需清洁/收纳等其它领域配合，在 suggestions 中提出，由管家转派。`,
   tools: [fridgeInventoryTool, orderGroceriesTool, kitchenSafetyCheckTool, mealStatsTool],
-})
+}
+
+/** 工厂：注入 SQLite 记忆等可选依赖（主 agent 装配时调用） */
+export function createChef(opts: { memory?: Memory } = {}) {
+  return defineSubAgent({ ...spec, memory: opts.memory })
+}
+
+export const chef = createChef()
 
 export default chef

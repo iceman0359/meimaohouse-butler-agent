@@ -7,6 +7,9 @@
  *   GET  /api/agents  花名册 [{ id, name, domain, description }]
  *   POST /api/chat    { message } -> { reply }
  *
+ * 存储：启动即建库/迁移（BUTLER_DB_PATH，缺省 ./data/butler.db），
+ *       管家与全部子 agent 身份入库，chat 持久化 会话/消息/事件。
+ *
  * 运行：npm run web （先配置 .env 的 MODEL_PROVIDER；未配置时界面会提示）
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
@@ -15,11 +18,30 @@ import { extname, join, dirname, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { configureModel, ModelNotConfiguredError } from '@meimaohouse/agent-sdk'
 import { Butler } from '@meimaohouse/butler-core'
+import {
+  openDatabase,
+  closeDatabase,
+  ensureButlerAgent,
+  ensureSubAgent,
+  listTables,
+  describeTable,
+  listIndexes,
+  selectRows,
+} from '@meimaohouse/db'
 import { agents } from './agents.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PUBLIC_DIR = join(__dirname, '..', 'public')
 const PORT = Number(process.env.PORT ?? 8790)
+
+/* ---------------- 数据库装配（建库 + agent 身份入库，幂等） ---------------- */
+
+const db = openDatabase()
+const butlerRow = ensureButlerAgent(db)
+for (const sa of agents) {
+  ensureSubAgent(db, sa.spec, { parentAgentId: butlerRow.agent_id })
+}
+console.log(`[butler-web] 数据库就绪: ${process.env.BUTLER_DB_PATH ?? './data/butler.db'}（agents 已登记）`)
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -31,9 +53,9 @@ const MIME: Record<string, string> = {
   '.ico': 'image/x-icon',
 }
 
-/* ---------------- 管家装配（常驻进程，保留多轮对话记忆） ---------------- */
+/* ---------------- 管家装配（常驻进程，保留多轮对话记忆 + SQLite 持久化） ---------------- */
 
-const butler = new Butler({ subAgents: agents })
+const butler = new Butler({ subAgents: agents, db })
 
 let modelConfigured = false
 let modelProvider = ''
@@ -80,6 +102,33 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { agents: butler.listAgents() })
     }
 
+    /* 数据库浏览器 API（只读） */
+    if (path === '/api/db/tables') {
+      return sendJson(res, 200, { tables: listTables(db).map((t) => ({ name: t.name, kind: t.kind, rowCount: t.rowCount })) })
+    }
+
+    if (path.startsWith('/api/db/table/') && req.method === 'GET') {
+      const name = decodeURIComponent(path.slice('/api/db/table/'.length))
+      const limit = Number(url.searchParams.get('limit') ?? 50)
+      const offset = Number(url.searchParams.get('offset') ?? 0)
+      try {
+        const info = listTables(db).find((t) => t.name === name)
+        if (!info) return sendJson(res, 404, { error: `未知表: ${name}` })
+        return sendJson(res, 200, {
+          name,
+          rowCount: info.rowCount,
+          ddl: info.ddl,
+          columns: describeTable(db, name),
+          indexes: listIndexes(db, name),
+          rows: selectRows(db, name, limit, offset),
+          limit,
+          offset,
+        })
+      } catch (err) {
+        return sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+
     if (path === '/api/chat' && req.method === 'POST') {
       if (!modelConfigured) {
         return sendJson(res, 503, {
@@ -123,7 +172,14 @@ server.listen(PORT, () => {
   console.log(`[butler-web] 已装配子 Agent: ${agents.map((a) => a.spec.id).join(', ')}`)
 })
 
-// 优雅退出
+// 优雅退出：先关 HTTP，再关数据库（checkpoint WAL，把 -wal 日志合并回主文件）
 process.on('SIGINT', () => {
-  server.close(() => process.exit(0))
+  server.close(() => {
+    try {
+      closeDatabase(db)
+    } catch {
+      /* 已关闭则忽略 */
+    }
+    process.exit(0)
+  })
 })

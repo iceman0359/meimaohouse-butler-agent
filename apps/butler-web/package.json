@@ -11,7 +11,8 @@
   "dependencies": {
     "@meimaohouse/agent-sdk": "*",
     "@meimaohouse/butler-core": "*",
-    "@meimaohouse/chef-agent": "*"
+    "@meimaohouse/chef-agent": "*",
+    "@meimaohouse/db": "*"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",

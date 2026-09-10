@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>数据库浏览器 · meimaohouse butler</title>
+<style>
+  :root {
+    --bg: #f5f1e8; --panel: #fffdf8; --ink: #2b2a26; --muted: #8a857a;
+    --gold: #a8842c; --gold-dark: #8a6d1f; --line: #e5dcc8;
+    --chip-bg: #f2ecdc; --chip-border: #e2d8bf; --chip-ink: #6b5d3a;
+    --radius: 14px; --mono: ui-monospace, "SF Mono", Consolas, "Courier New", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+    background: var(--bg); color: var(--ink); display: flex; flex-direction: column;
+  }
+  header {
+    background: var(--panel); border-bottom: 1px solid var(--line);
+    padding: 12px 20px; display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04); position: sticky; top: 0; z-index: 5;
+  }
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+    color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px;
+  }
+  header h1 { font-size: 17px; font-weight: 600; }
+  header .sub { font-size: 12px; color: var(--muted); }
+  header a.back { margin-left: auto; font-size: 13px; color: var(--gold-dark); text-decoration: none; }
+  main { display: flex; flex: 1; min-height: calc(100vh - 65px); }
+  /* 侧栏：表清单 */
+  aside {
+    width: 230px; flex-shrink: 0; background: var(--panel);
+    border-right: 1px solid var(--line); padding: 14px 10px; overflow-y: auto;
+  }
+  aside h2 { font-size: 12px; color: var(--muted); font-weight: 500; margin: 0 8px 8px; }
+  .table-btn {
+    display: flex; justify-content: space-between; align-items: center; width: 100%;
+    padding: 9px 12px; margin-bottom: 4px; border: 1px solid transparent; border-radius: 10px;
+    background: none; cursor: pointer; font-size: 14px; font-family: var(--mono); text-align: left;
+  }
+  .table-btn:hover { background: #f7f2e5; }
+  .table-btn.active { background: var(--chip-bg); border-color: var(--chip-border); color: var(--chip-ink); font-weight: 600; }
+  .table-btn .n { font-size: 11px; color: var(--muted); background: #eee7d4; border-radius: 999px; padding: 1px 8px; }
+  /* 主区 */
+  section { flex: 1; padding: 18px 22px; overflow-y: auto; }
+  .empty { color: var(--muted); text-align: center; margin-top: 80px; font-size: 14px; }
+  .meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .meta .chip {
+    font-size: 12px; padding: 4px 12px; border-radius: 999px;
+    background: var(--chip-bg); border: 1px solid var(--chip-border); color: var(--chip-ink);
+  }
+  h3 { font-size: 13px; color: var(--muted); font-weight: 500; margin: 18px 0 8px; }
+  pre.ddl {
+    font-family: var(--mono); font-size: 12px; line-height: 1.6;
+    background: #2b2a26; color: #e8e2d0; border-radius: var(--radius);
+    padding: 14px 16px; overflow-x: auto; white-space: pre;
+  }
+  /* ── 数据表格滚动容器：限制最大高度，超出出竖向滚动条（支持滚轮），表头吸顶 ── */
+  .table-wrap {
+    max-height: clamp(320px, 60vh, 720px);  /* 表格区域最大高度：小表不撑高，大表内滚 */
+    overflow: auto;                          /* 内容超高时出现竖向滚动条（横向兜底） */
+    overscroll-behavior: contain;            /* 滚到头不带动页面整体滚动 */
+    background: var(--panel);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 4px rgba(0,0,0,.05);
+    scrollbar-width: thin;                   /* Firefox 细滚动条 */
+    scrollbar-color: #d8cfb8 transparent;
+  }
+  .table-wrap::-webkit-scrollbar { width: 10px; height: 10px; }
+  .table-wrap::-webkit-scrollbar-track { background: transparent; }
+  .table-wrap::-webkit-scrollbar-thumb { background: #d8cfb8; border-radius: 6px; border: 2px solid var(--panel); }
+  /* 原来圆角/阴影/overflow:hidden 在表格上，现上移到 .table-wrap；
+     overflow:hidden 会创建独立滚动环境、破坏 sticky，必须移除 */
+  table.grid { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; background: var(--panel); }
+  table.grid th, table.grid td { border-bottom: 1px solid #efe8d8; padding: 8px 10px; text-align: left; vertical-align: top; }
+  /* sticky 基准从页面视口(top:65px)改为滚动容器自身(top:0)，滚动时表头固定在容器顶部 */
+  table.grid th { background: #f0e9d8; font-weight: 600; font-size: 12px; color: #6b5d3a; white-space: nowrap; position: sticky; top: 0; z-index: 2; border-bottom: 1px solid #e2d8bf; }
+  table.grid td { font-family: var(--mono); font-size: 12px; max-width: 380px; overflow-wrap: anywhere; }
+  table.grid tr:hover td { background: #faf6ea; }
+  .null { color: #b8b2a4; font-style: italic; }
+  .pager { display: flex; gap: 10px; align-items: center; margin: 14px 0; font-size: 13px; color: var(--muted); }
+  .pager button {
+    padding: 6px 16px; border-radius: 10px; border: 1px solid var(--chip-border);
+    background: var(--panel); cursor: pointer; font-size: 13px;
+  }
+  .pager button:disabled { opacity: .4; cursor: default; }
+  .schema-cols { display: flex; flex-wrap: wrap; gap: 8px; }
+  .col-chip { font-family: var(--mono); font-size: 12px; padding: 5px 10px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); }
+  .col-chip b { color: var(--gold-dark); }
+  .col-chip .t { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div class="avatar">🗄️</div>
+  <div>
+    <h1>数据库浏览器</h1>
+    <div class="sub">meimaohouse butler · SQLite 只读视图 · data/butler.db</div>
+  </div>
+  <a class="back" href="/">← 返回管家对话</a>
+</header>
+<main>
+  <aside id="sidebar"><h2>加载中…</h2></aside>
+  <section id="content"><div class="empty">左侧选择一张表查看结构与数据</div></section>
+</main>
+<script>
+const PAGE = 50
+let current = null
+let offset = 0
+
+async function api(path) {
+  const res = await fetch(path)
+  if (!res.ok) throw new Error((await res.json()).error || res.status)
+  return res.json()
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+}
+function cell(v) {
+  if (v === null || v === undefined) return '<span class="null">NULL</span>'
+  const s = typeof v === 'object' ? JSON.stringify(v) : String(v)
+  return esc(s.length > 120 ? s.slice(0, 117) + '…' : s)
+}
+
+async function loadSidebar() {
+  const { tables } = await api('/api/db/tables')
+  const bar = document.getElementById('sidebar')
+  bar.innerHTML = '<h2>表（' + tables.length + '）</h2>' + tables
+    .map((t) => `<button class="table-btn" data-name="${esc(t.name)}">${esc(t.name)}<span class="n">${t.rowCount}</span></button>`)
+    .join('')
+  bar.querySelectorAll('.table-btn').forEach((btn) =>
+    btn.addEventListener('click', () => showTable(btn.dataset.name)),
+  )
+}
+
+async function showTable(name, newOffset = 0) {
+  current = name
+  offset = newOffset
+  document.querySelectorAll('.table-btn').forEach((b) => b.classList.toggle('active', b.dataset.name === name))
+  const el = document.getElementById('content')
+  el.innerHTML = '<div class="empty">加载中…</div>'
+  try {
+    const t = await api(`/api/db/table/${encodeURIComponent(name)}?limit=${PAGE}&offset=${offset}`)
+    const colChips = t.columns
+      .map(
+        (c) =>
+          `<span class="col-chip"><b>${esc(c.name)}</b> <span class="t">${esc(c.type || '')}${c.pk ? ' ·PK' : ''}${c.notnull ? ' ·NOT NULL' : ''}</span></span>`,
+      )
+      .join('')
+    const head = t.columns.map((c) => `<th>${esc(c.name)}</th>`).join('')
+    const body = t.rows
+      .map((r) => '<tr>' + t.columns.map((c) => `<td>${cell(r[c.name])}</td>`).join('') + '</tr>')
+      .join('')
+    el.innerHTML = `
+      <div class="meta">
+        <span class="chip">📋 ${esc(t.name)}</span>
+        <span class="chip">${t.rowCount} 行</span>
+        <span class="chip">${t.columns.length} 列</span>
+        ${t.indexes.length ? `<span class="chip">索引 ${t.indexes.map((i) => esc(i.name)).join('、')}</span>` : ''}
+      </div>
+      <h3>列结构</h3>
+      <div class="schema-cols">${colChips}</div>
+      <h3>建表 DDL</h3>
+      <pre class="ddl">${esc(t.ddl)}</pre>
+      <h3>数据（rowid ${offset + 1} 起，每页 ${PAGE} 行）</h3>
+      <div class="pager">
+        <button id="prev" ${offset <= 0 ? 'disabled' : ''}>← 上一页</button>
+        <span>${t.rowCount === 0 ? '空表' : `${offset + 1} – ${Math.min(offset + PAGE, t.rowCount)} / ${t.rowCount}`}</span>
+        <button id="next" ${offset + PAGE >= t.rowCount ? 'disabled' : ''}>下一页 →</button>
+      </div>
+      <div class="table-wrap"><table class="grid"><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="' + t.columns.length + '" class="null" style="text-align:center">（无数据）</td></tr>'}</tbody></table></div>`
+    el.querySelector('#prev').addEventListener('click', () => showTable(current, Math.max(0, offset - PAGE)))
+    el.querySelector('#next').addEventListener('click', () => showTable(current, offset + PAGE))
+  } catch (err) {
+    el.innerHTML = `<div class="empty">加载失败：${esc(err.message)}</div>`
+  }
+}
+
+loadSidebar().catch((e) => {
+  document.getElementById('sidebar').innerHTML = `<h2>加载失败：${esc(e.message)}</h2>`
+})
+</script>
+</body>
+</html>

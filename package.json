@@ -13,8 +13,10 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "npm run build -w @meimaohouse/agent-sdk && npm run build -w @meimaohouse/butler-core && npm run build -w @meimaohouse/chef-agent && npm run build -w @meimaohouse/butler-web",
-    "demo": "npx tsx examples/butler-demo.ts",
+    "build": "npm run build -w @meimaohouse/agent-sdk && npm run build -w @meimaohouse/db && npm run build -w @meimaohouse/butler-core && npm run build -w @meimaohouse/chef-agent && npm run build -w @meimaohouse/butler-web",
+    "demo": "npx tsx --env-file-if-exists=.env examples/butler-demo.ts",
+    "demo:db": "npx tsx examples/db-demo.ts",
+    "db:inspect": "npx tsx examples/db-inspect.ts",
     "web": "npm run build -w @meimaohouse/butler-web && node --env-file-if-exists=.env apps/butler-web/dist/server.js"
   },
   "devDependencies": {
