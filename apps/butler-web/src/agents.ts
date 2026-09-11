@@ -4,10 +4,12 @@
 import type { SubAgent } from '@meimaohouse/agent-sdk'
 import barista from '@meimaohouse/barista-agent'
 import chef from '@meimaohouse/chef-agent'
+import cleaner from '@meimaohouse/cleaner-agent'
 
 export const agents: SubAgent[] = [
   chef,
+  cleaner,
   barista,
   // 新子 Agent 在此追加，如：
-  // cleaner, appliance, shopping, ...
+  // appliance, shopping, ...
 ]

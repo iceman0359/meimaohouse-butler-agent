@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大管家 · meimaohouse butler</title>
+<style>
+  :root {
+    --bg: #f5f1e8;
+    --panel: #fffdf8;
+    --ink: #2b2a26;
+    --muted: #8a857a;
+    --gold: #a8842c;
+    --gold-dark: #8a6d1f;
+    --butler: #f0e6cf;
+    --human: #d9e4d2;
+    --err: #b3563a;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    background: var(--panel);
+    border-bottom: 1px solid #e5dcc8;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.04);
+  }
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+  }
+  header h1 { font-size: 17px; font-weight: 600; }
+  header .sub { font-size: 12px; color: var(--muted); }
+  .status { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #c9c2b2; }
+  .dot.ok { background: #5a9e5a; }
+  .dot.err { background: var(--err); }
+  .roster {
+    display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 20px;
+    background: var(--panel); border-bottom: 1px solid #efe8d8;
+  }
+  .chip {
+    font-size: 12px; padding: 4px 12px; border-radius: 999px;
+    background: #f2ecdc; border: 1px solid #e2d8bf; color: #6b5d3a;
+  }
+  #banner {
+    display: none; margin: 12px 20px 0; padding: 12px 16px; border-radius: var(--radius);
+    background: #fbe9e2; border: 1px solid #f0cdbc; color: #7c3a20; font-size: 13px; line-height: 1.6;
+  }
+  #banner code { background: #f3d8cb; padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+  main {
+    flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .msg { display: flex; gap: 10px; max-width: 78%; }
+  .msg.human { align-self: flex-end; flex-direction: row-reverse; }
+  .bubble { padding: 11px 15px; border-radius: var(--radius); font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+  .msg.butler .bubble { background: var(--butler); border-top-left-radius: 4px; }
+  .msg.human .bubble { background: var(--human); border-top-right-radius: 4px; }
+  .mini { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+  .msg.butler .mini { background: linear-gradient(135deg, var(--gold), var(--gold-dark)); color: #fff; }
+  .msg.human .mini { background: #cfd8c8; color: #55614a; }
+  .typing .bubble::after {
+    content: "…"; animation: blink 1s steps(2) infinite;
+  }
+  @keyframes blink { 50% { opacity: .3; } }
+  footer {
+    background: var(--panel); border-top: 1px solid #e5dcc8;
+    padding: 12px 20px; display: flex; gap: 10px;
+  }
+  footer input {
+    flex: 1; padding: 12px 16px; border-radius: 999px; border: 1px solid #ddd2ba;
+    font-size: 14px; outline: none; background: #fff;
+  }
+  footer input:focus { border-color: var(--gold); }
+  footer button {
+    padding: 0 24px; border-radius: 999px; border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--gold), var(--gold-dark)); color: #fff;
+    font-size: 14px; font-weight: 600;
+  }
+  footer button:disabled { opacity: .5; cursor: not-allowed; }
+  .empty { text-align: center; color: var(--muted); font-size: 13px; margin-top: 40px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <div class="avatar">🎩</div>
+  <div>
+    <h1>大管家</h1>
+    <div class="sub">meimaohouse butler · 人类只和我对话</div>
+  </div>
+  <div class="status"><span class="dot ok" id="dot"></span><span id="statusText">模型已就绪 · meimaoapi</span></div>
+</header>
+
+<div class="roster" id="roster"><span class="chip" title="掌管厨房域：冰箱库存与食材新鲜度、菜品采购下单、厨房安全检查、剩菜处理、饮食数据统计与饮食控制建议。">厨师 · 厨房域</span></div>
+<div id="banner"></div>
+
+<main id="chat">
+  <div class="empty">
+    我是大管家 🎩<br>
+    告诉我你的需求，我会安排手下（厨师、清洁工、电器管理…）去办。<br>
+    比如："晚上想吃得清淡点，看看冰箱里有什么能做的？"
+  </div>
+</main>
+
+<footer>
+  <input id="input" type="text" placeholder="跟管家说说你的需求…" autocomplete="off">
+  <button id="send">发送</button>
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id)
+const chat = $('chat'), input = $('input'), sendBtn = $('send')
+
+/* ---------- 初始状态 ---------- */
+async function init() {
+  const [health, roster] = await Promise.all([
+    fetch('/api/health').then(r => r.json()),
+    fetch('/api/agents').then(r => r.json()),
+  ])
+  // 状态灯
+  const dot = $('dot'), st = $('statusText')
+  if (health.modelConfigured) {
+    dot.className = 'dot ok'
+    st.textContent = `模型已就绪 · ${health.modelProvider || '?'}`
+  } else {
+    dot.className = 'dot err'
+    st.textContent = '模型未配置'
+    $('banner').style.display = 'block'
+    $('banner').innerHTML = '⚠️ 模型尚未配置，无法对话。请在项目根目录 <code>.env</code> 中设置 <code>MODEL_PROVIDER</code>（如 <code>openai</code> + <code>OPENAI_API_KEY</code>），然后重启服务。参考 <code>.env.example</code>。'
+  }
+  // 花名册
+  const chips = roster.agents || []
+  if (chips.length) {
+    $('roster').innerHTML = chips.map(a =>
+      `<span class="chip" title="${a.description}">${a.name} · ${a.domain}</span>`
+    ).join('')
+  }
+}
+init()
+
+/* ---------- 聊天 ---------- */
+function addMsg(who, text, typing = false) {
+  const empty = chat.querySelector('.empty')
+  if (empty) empty.remove()
+  const div = document.createElement('div')
+  div.className = `msg ${who}${typing ? ' typing' : ''}`
+  div.innerHTML = `<div class="mini">${who === 'butler' ? '🎩' : '👤'}</div><div class="bubble"></div>`
+  div.querySelector('.bubble').textContent = text
+  chat.appendChild(div)
+  chat.scrollTop = chat.scrollHeight
+  return div
+}
+
+async function send() {
+  const message = input.value.trim()
+  if (!message || sendBtn.disabled) return
+  input.value = ''
+  addMsg('human', message)
+  const typing = addMsg('butler', '正在安排…', true)
+  sendBtn.disabled = true
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    })
+    const data = await res.json()
+    typing.classList.remove('typing')
+    typing.querySelector('.bubble').textContent =
+      res.ok ? data.reply : `⚠️ ${data.error || '请求失败'}\n${data.hint || ''}`
+  } catch (e) {
+    typing.classList.remove('typing')
+    typing.querySelector('.bubble').textContent = `⚠️ 网络错误：${e.message}`
+  } finally {
+    sendBtn.disabled = false
+    input.focus()
+  }
+}
+
+sendBtn.addEventListener('click', send)
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send() })
+input.focus()
+</script>
+
+
+</body></html>

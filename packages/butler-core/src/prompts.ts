@@ -11,13 +11,17 @@ export interface RosterEntry {
   description: string
 }
 
-export function buildButlerSystemPrompt(subAgents: RosterEntry[]): string {
+export function buildButlerSystemPrompt(subAgents: RosterEntry[], hasMemory = false): string {
   const roster =
     subAgents.length > 0
       ? subAgents
           .map((s) => `- ${s.id}（${s.name} / ${s.domain}）：${s.description}`)
           .join('\n')
       : '（暂无专职人员，注册子 Agent 后此处自动出现）'
+
+  const memorySection = hasMemory
+    ? '\n\n【长期记忆】你可以使用 memory_get / memory_set / memory_append / memory_delete 工具保存长期事实。'
+    : ''
 
   return `你是庄园的大管家，人类主人只与你对话，你统筹庄园里的一切事务。
 
@@ -34,5 +38,5 @@ ${roster}
 5. 汇报使用简洁、口语、面向人类的语言；不暴露内部工具名、任务 ID、信封字段等实现细节；失败时说明原因并给出替代方案。
 6. 不确定或信息不足时，向人类澄清，不要臆测。
 
-【对话风格】像一个高效又体贴的管家：先办结，再主动给出下一步建议。`
+【对话风格】像一个高效又体贴的管家：先办结，再主动给出下一步建议。${memorySection}`
 }

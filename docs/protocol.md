@@ -15,7 +15,7 @@
 子 Agent（独立上下文）
  │  执行领域任务（可调用自己的工具）
  ▼
-ResultEnvelope（done / failed / needs_human / deferred）
+ResultEnvelope（done / failed / needs_human / deferred / unavailable）
  │
  ▼
 管家转述为面向人的语言 → 人类
@@ -40,14 +40,14 @@ ResultEnvelope（done / failed / needs_human / deferred）
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `task_id` | string | 唯一 ID，格式 `<agentId>_<base36时间戳>_<随机6位>` |
+| `task_id` | string | 唯一 ID，格式 `<agentId>_<base36时间戳>_<UUID前8位>` |
 | `domain` | string | 目标领域（= 子 Agent 的 id，如 `chef`） |
 
 示例：
 
 ```json
 {
-  "task_id": "chef_m1x2ab_9kq3z1",
+  "task_id": "chef_m1x2ab_9kq3z1a2",
   "domain": "chef",
   "intent": "order_groceries",
   "params": { "items": [{ "name": "牛奶", "qty": 2 }] },
@@ -61,10 +61,11 @@ ResultEnvelope（done / failed / needs_human / deferred）
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | `task_id` | string | ✅ | 回显对应任务的 task_id |
-| `status` | `done\|failed\|needs_human\|deferred` | ✅ | 见下表 |
+| `status` | `done\|failed\|needs_human\|deferred\|unavailable` | ✅ | 见下表 |
 | `summary` | string | ✅ | 一句话结果，**面向人类**（管家会转述） |
 | `detail` | object | 否 | 结构化详情，供管家/后续任务引用 |
-| `error` | string | 否 | 失败原因（`failed` 时必填） |
+| `error` | string | `failed` 时必填 | 失败原因 |
+| `error_code` | string | 否 | 机器可读错误码，如 `capability_not_configured` |
 | `suggestions` | string[] | 否 | 给管家的后续建议；**需要其他子 Agent 协作时写这里** |
 | `completed_at` | string | 否 | 完成时间 ISO 8601 |
 
@@ -76,11 +77,12 @@ ResultEnvelope（done / failed / needs_human / deferred）
 | `failed` | 执行失败 | 转述原因 + 给出替代方案 |
 | `needs_human` | 需要人类拍板（大额采购、上门预约等） | 把决策点清楚转述给人类，等人类确认后再派发 |
 | `deferred` | 已排期/暂缓（定时任务已登记） | 告知人类已安排及时间 |
+| `unavailable` | 当前环境没有配置执行该任务所需的能力 | 明确说明能力未接入，不伪造执行结果 |
 
 ## 4. 错误与边界约定
 
 - 子 Agent 执行抛异常时，适配器兜底返回 `failed` 信封（不会让管家看到异常栈）。
-- 工具未返回的信息，子 Agent 必须写"暂无数据"，**禁止编造**。
+- 未配置的能力不会注册工具；子 Agent 必须返回 `unavailable`，**禁止编造成功结果**。
 - 信封所有字段必须 JSON 可序列化（工具返回值建议 `JSON.stringify` 后返回）。
 
 ## 5. 协议演进

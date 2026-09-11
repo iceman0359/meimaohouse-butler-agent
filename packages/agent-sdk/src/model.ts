@@ -24,6 +24,8 @@ export interface ModelEnv {
   bedrockModelId?: string
   /** OpenAI API Key（缺省 OPENAI_API_KEY） */
   openaiApiKey?: string
+  /** OpenAI 模型名（缺省 OPENAI_MODEL_ID） */
+  openaiModelId?: string
   /** DeepSeek API Key（缺省 DEEPSEEK_API_KEY） */
   deepseekApiKey?: string
   /** DeepSeek 模型名（缺省 DEEPSEEK_MODEL_ID，默认 deepseek-chat） */
@@ -48,7 +50,7 @@ export class ModelNotConfiguredError extends Error {
       [
         '模型厂商未配置。',
         '',
-        '入口处先 await configureModel()，或在 .env 中设置 MODEL_PROVIDER（支持: bedrock | openai），例如：',
+        '入口处先 await configureModel()，或在 .env 中设置 MODEL_PROVIDER（支持: bedrock | openai | deepseek | meimaoapi | ollama），例如：',
         '  MODEL_PROVIDER=openai',
         '  OPENAI_API_KEY=sk-...',
         '',
@@ -98,7 +100,8 @@ async function loadOpenAI(env: ModelEnv): Promise<ModelInstance> {
   }
   try {
     const { OpenAIModel } = await import('@strands-agents/sdk/models/openai')
-    return new OpenAIModel({ apiKey, api: 'chat' })
+    const modelId = env.openaiModelId ?? process.env.OPENAI_MODEL_ID
+    return new OpenAIModel({ apiKey, api: 'chat', ...(modelId ? { modelId } : {}) })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     throw new Error(`加载 OpenAI 模型失败：${msg}（使用该厂商需先安装依赖: npm i openai）`)

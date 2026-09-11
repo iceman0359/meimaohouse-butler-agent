@@ -17,7 +17,6 @@
   },
   "dependencies": {
     "@meimaohouse/agent-sdk": "*",
-    "@strands-agents/sdk": "^1.13.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {
